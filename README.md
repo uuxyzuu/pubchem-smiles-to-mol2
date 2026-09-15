@@ -1,6 +1,6 @@
-# PubChem SMILES to MOL2
+# PubChem SMILES to MOL2 and PDBQT
 
-Batch-convert a PubChem CSV export—or another CSV containing SMILES—into separate, energy-minimized 3D MOL2 files.
+Batch-convert a PubChem CSV export—or another CSV containing SMILES—into separate, energy-minimized 3D MOL2 files and AutoDock Vina ligand PDBQT files.
 
 PubChem commonly exports SMILES in CSV or SDF form but does not provide a convenient one-click batch export of separate MOL2 files. This tool fills that workflow gap while producing a transparent row-by-row conversion report.
 
@@ -13,6 +13,7 @@ PubChem commonly exports SMILES in CSV or SDF form but does not provide a conven
 - Minimizes conformers with MMFF94s, falling back to UFF when needed.
 - Keeps the lowest calculated-energy conformer.
 - Writes one MOL2 file per compound using Open Babel.
+- Prepares one flexible ligand PDBQT per eligible compound using Meeko (atom types, partial charges and torsion tree).
 - Creates `conversion_report.csv` and a ZIP archive of all successful structures.
 - Continues processing if an individual molecule fails.
 
@@ -42,6 +43,7 @@ Output:
 results/
 ├── conversion_report.csv
 ├── PubChem_compounds_mol2.zip
+├── pdbqt_ligands/
 └── mol2_structures/
     ├── CID_123_Compound_A.mol2
     └── CID_456_Compound_B.mol2
@@ -72,6 +74,8 @@ The program returns exit code `0` when every row succeeds, `2` when conversion i
 - MMFF94s/UFF minimization gives a practical starting geometry, not a quantum-mechanical global minimum.
 - MOL2 atom types and charges should be checked against the requirements of the downstream docking or molecular-dynamics program.
 - Metal-containing compounds and unusual covalent species may require manual parameterization.
+- Disconnected fragments and salts are skipped for PDBQT; inspect `pdbqt_message` in the report and choose the biologically relevant component before docking.
+- A PDBQT ligand still requires a prepared receptor PDBQT, defined search box, and appropriate protonation/tautomer decisions for the intended assay pH.
 
 ## Input example
 
