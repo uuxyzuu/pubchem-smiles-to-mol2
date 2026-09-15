@@ -14,6 +14,7 @@ from pathlib import Path
 from openbabel import pybel
 from rdkit import Chem
 from rdkit.Chem import AllChem
+from meeko import MoleculePreparation, PDBQTWriterLegacy
 
 
 def safe_filename(value: str, fallback: str = "compound") -> str:
@@ -92,11 +93,25 @@ def write_mol2(mol, conf_id: int, title: str, destination: Path) -> None:
         raise ValueError("MOL2 export failed")
 
 
+def write_pdbqt(mol, conf_id: int, destination: Path) -> None:
+    if len(Chem.GetMolFrags(mol)) != 1:
+        raise ValueError("Disconnected fragments/salts require manual ligand selection")
+    setups = MoleculePreparation().prepare(mol, conformer_id=conf_id)
+    if len(setups) != 1:
+        raise ValueError("Ligand parameterization did not yield one setup")
+    pdbqt, ok, error = PDBQTWriterLegacy.write_string(setups[0])
+    if not ok or "ROOT" not in pdbqt or "TORSDOF" not in pdbqt:
+        raise ValueError(error or "Invalid PDBQT torsion tree")
+    destination.write_text(pdbqt, encoding="utf-8")
+
+
 def convert(args: argparse.Namespace) -> int:
     input_path = Path(args.input_csv)
     output_dir = Path(args.output_dir)
     structures_dir = output_dir / "mol2_structures"
     structures_dir.mkdir(parents=True, exist_ok=True)
+    pdbqt_dir = output_dir / "pdbqt_ligands"
+    pdbqt_dir.mkdir(parents=True, exist_ok=True)
 
     with input_path.open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
@@ -125,6 +140,7 @@ def convert(args: argparse.Namespace) -> int:
             stem = f"{stem}_{used_names[stem]}"
         destination = structures_dir / f"{stem}.mol2"
         status, method, energy, message = "failed", "", None, ""
+        pdbqt_status, pdbqt_message = "not_attempted", ""
         try:
             if not smiles:
                 raise ValueError("Missing SMILES")
@@ -134,6 +150,11 @@ def convert(args: argparse.Namespace) -> int:
             )
             write_mol2(mol, conf_id, title, destination)
             status = "success"
+            try:
+                write_pdbqt(mol, conf_id, pdbqt_dir / f"{stem}.pdbqt")
+                pdbqt_status = "success"
+            except Exception as exc:
+                pdbqt_status, pdbqt_message = "failed", str(exc)
         except Exception as exc:
             message = str(exc)
         report.append({
@@ -146,6 +167,9 @@ def convert(args: argparse.Namespace) -> int:
             "energy_kcal_mol": "" if energy is None else f"{energy:.6f}",
             "output_file": destination.name if status == "success" else "",
             "message": message,
+            "pdbqt_status": pdbqt_status,
+            "pdbqt_file": f"{stem}.pdbqt" if pdbqt_status == "success" else "",
+            "pdbqt_message": pdbqt_message,
         })
         if index % 25 == 0 or index == len(rows):
             print(f"Processed {index}/{len(rows)}", flush=True)
@@ -161,10 +185,13 @@ def convert(args: argparse.Namespace) -> int:
         archive.write(report_path, report_path.name)
         for path in sorted(structures_dir.glob("*.mol2")):
             archive.write(path, f"mol2_structures/{path.name}")
+        for path in sorted(pdbqt_dir.glob("*.pdbqt")):
+            archive.write(path, f"pdbqt_ligands/{path.name}")
 
     success = sum(item["status"] == "success" for item in report)
     methods = Counter(item["optimization"] for item in report if item["status"] == "success")
     print(f"Completed: {success}/{len(report)} successful; methods={dict(methods)}")
+    print(f"PDBQT: {sum(item['pdbqt_status'] == 'success' for item in report)}/{len(report)} successful")
     print(f"Archive: {archive_path}")
     return 0 if success == len(report) else 2
 
