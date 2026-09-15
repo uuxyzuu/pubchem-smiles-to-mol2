@@ -37,6 +37,18 @@ For a standard PubChem CSV export containing `cid`, `Name`, and `SMILES`:
 python smiles_to_mol2.py PubChem_compounds.csv -o results
 ```
 
+After preparing your receptor separately and selecting a search box, dock an eligible ligand with Vina:
+
+```bash
+vina --receptor receptor.pdbqt \
+  --ligand results/pdbqt_ligands/CID_2244_Aspirin.pdbqt \
+  --center_x 0 --center_y 0 --center_z 0 \
+  --size_x 20 --size_y 20 --size_z 20 \
+  --out aspirin_docked.pdbqt
+```
+
+The box center above is only a placeholder: replace it with coordinates centered on your chosen binding site and use appropriate box dimensions. For high-throughput docking, iterate over the successful PDBQT filenames in `conversion_report.csv`.
+
 Output:
 
 ```text
