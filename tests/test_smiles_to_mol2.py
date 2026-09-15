@@ -25,3 +25,6 @@ def test_end_to_end(tmp_path):
     with (output / "conversion_report.csv").open() as handle:
         report = list(csv.DictReader(handle))
     assert report[0]["status"] == "success"
+    assert report[0]["pdbqt_status"] == "success"
+    pdbqt = next((output / "pdbqt_ligands").glob("*.pdbqt")).read_text()
+    assert "ROOT" in pdbqt and "TORSDOF" in pdbqt
